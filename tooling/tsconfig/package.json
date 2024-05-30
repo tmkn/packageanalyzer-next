@@ -1,0 +1,12 @@
+{
+    "name": "@repo/tsconfig",
+    "version": "1.0.0",
+    "description": "",
+    "exports": {
+        "./strict": "./strict.tsconfig.json",
+        "./unit-test": "./unit-test.tsconfig.json"
+    },
+    "scripts": {},
+    "author": "",
+    "license": "ISC"
+}

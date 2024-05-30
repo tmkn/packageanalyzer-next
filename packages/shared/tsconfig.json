@@ -1,0 +1,6 @@
+{
+    "extends": "@repo/tsconfig/strict",
+    "compilerOptions": {
+        "outDir": "build"
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "name": "packageanalyzer-next",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "test": "turbo test",
+        "test:coverage": "turbo test:coverage",
+        "prettier": "prettier --write \"**/*.{ts,tsx,md}\"",
+        "build": "turbo build",
+        "dev": "turbo dev"
+    },
+    "author": "tmkn",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/lodash": "^4.17.4",
+        "@types/node": "^20.12.13",
+        "@types/semver": "^7.5.8",
+        "@vitest/coverage-v8": "^1.6.0",
+        "prettier": "^3.2.5",
+        "turbo": "^1.13.3",
+        "typescript": "^5.4.5",
+        "vitest": "^1.6.0"
+    },
+    "packageManager": "npm@10.5.0",
+    "workspaces": [
+        "apps/*",
+        "packages/*",
+        "tooling/*"
+    ],
+    "dependencies": {
+        "chalk": "^4.1.0",
+        "lodash": "^4.17.21",
+        "semver": "^7.6.2",
+        "zod": "^3.23.8"
+    }
+}

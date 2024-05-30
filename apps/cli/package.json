@@ -1,0 +1,22 @@
+{
+    "name": "cli",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "test": "vitest --run",
+        "test:coverage": "vitest --run --coverage"
+    },
+    "author": "tmkn",
+    "license": "MIT",
+    "dependencies": {
+        "@lib/node": "*",
+        "@lib/shared": "*"
+    },
+    "devDependencies": {
+        "@repo/tsconfig": "*"
+    }
+}
