@@ -8,7 +8,7 @@
         "test:coverage": "turbo test:coverage",
         "prettier": "prettier --write \"**/*.{ts,tsx,md}\"",
         "build": "turbo build",
-        "dev": "turbo dev"
+        "dev": "turbo watch dev"
     },
     "author": "tmkn",
     "license": "MIT",
@@ -16,11 +16,11 @@
         "@types/lodash": "^4.17.4",
         "@types/node": "^20.12.13",
         "@types/semver": "^7.5.8",
-        "@vitest/coverage-v8": "^1.6.0",
-        "prettier": "^3.2.5",
-        "turbo": "^1.13.3",
-        "typescript": "^5.4.5",
-        "vitest": "^1.6.0"
+        "@vitest/coverage-v8": "^2.0.5",
+        "prettier": "^3.3.3",
+        "turbo": "^2.1.1",
+        "typescript": "^5.5.4",
+        "vitest": "^2.0.5"
     },
     "packageManager": "npm@10.5.0",
     "workspaces": [
@@ -31,7 +31,7 @@
     "dependencies": {
         "chalk": "^4.1.0",
         "lodash": "^4.17.21",
-        "semver": "^7.6.2",
+        "semver": "^7.6.3",
         "zod": "^3.23.8"
     }
 }
