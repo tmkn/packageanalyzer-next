@@ -1,5 +1,6 @@
 {
     "extends": "@repo/tsconfig/strict.tsconfig.json",
+    "include": ["src", "tests"],
     "compilerOptions": {
         "outDir": "build"
     }
