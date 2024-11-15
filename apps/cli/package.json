@@ -17,6 +17,6 @@
         "@lib/shared": "*"
     },
     "devDependencies": {
-        "@repo/tsconfig": "*"
+        "@tooling/tsconfig": "*"
     }
 }

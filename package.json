@@ -8,7 +8,8 @@
         "test:coverage": "turbo test:coverage",
         "prettier": "prettier --write \"**/*.{ts,tsx,md}\"",
         "build": "turbo build",
-        "dev": "turbo watch dev"
+        "dev": "turbo watch dev",
+        "turbo": "turbo"
     },
     "author": "tmkn",
     "license": "MIT",
@@ -18,7 +19,7 @@
         "@types/semver": "^7.5.8",
         "@vitest/coverage-v8": "^2.0.5",
         "prettier": "^3.3.3",
-        "turbo": "^2.1.1",
+        "turbo": "^2.3.0",
         "typescript": "^5.5.4",
         "vitest": "^2.0.5"
     },
