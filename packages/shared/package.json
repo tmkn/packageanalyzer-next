@@ -3,16 +3,26 @@
     "version": "1.0.0",
     "type": "module",
     "description": "",
-    "exports": "./src/main.ts",
+    "exports": {
+        ".": {
+            "types": "./src/main.ts",
+            "default": "./build/src/main.js"
+        },
+        "./testutils": {
+            "types": "./src/testutils/index.ts",
+            "default": "./build/src/testutils/index.js"
+        }
+    },
     "scripts": {
-        "build": "tsc",
-        "dev": "tsc --watch",
+        "build": "tsc -b",
+        "dev": "tsc -b --watch",
         "test": "vitest --run",
         "test:coverage": "vitest --run --coverage"
     },
     "author": "tmkn",
     "license": "MIT",
     "devDependencies": {
-        "@tooling/tsconfig": "*"
+        "@tooling/tsconfig": "*",
+        "@tooling/vitest": "*"
     }
 }

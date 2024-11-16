@@ -18,7 +18,7 @@
             "name": "Debug CLI",
             "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/apps/cli/build/src/main.js",
-            "args": ["analyze", "--package", "webpack"],
+            "args": ["react"],
             // "preLaunchTask": "tsc: build - tsconfig.json",
             "outFiles": [
                 "${workspaceFolder}/apps/cli/build/**/*.js",

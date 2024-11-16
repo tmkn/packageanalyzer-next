@@ -19,8 +19,8 @@
         "@types/semver": "^7.5.8",
         "@vitest/coverage-v8": "^2.0.5",
         "prettier": "^3.3.3",
-        "turbo": "^2.3.0",
-        "typescript": "^5.5.4",
+        "turbo": "^2.3.1",
+        "typescript": "^5.7.2",
         "vitest": "^2.0.5"
     },
     "packageManager": "npm@10.5.0",
@@ -30,6 +30,7 @@
         "tooling/*"
     ],
     "dependencies": {
+        "@tanstack/query-core": "^5.60.5",
         "chalk": "^4.1.0",
         "lodash": "^4.17.21",
         "semver": "^7.6.3",
