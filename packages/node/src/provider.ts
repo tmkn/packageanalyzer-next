@@ -1,83 +1,117 @@
+import { performance } from "perf_hooks";
+
 import * as semver from "semver";
+import { QueryClient } from "@tanstack/query-core";
 
 import {
-    type IPackageMetadata,
     type IPackageJson,
     isUnpublished,
-    type IPackageJsonProvider,
+    type IPackageMetaDataVersionProvider,
     type IPackageMetaDataProvider,
     type PackageMetaData,
-    type IUnpublishedPackageMetadata,
-    type Url
+    type Url,
+    type ILogger,
+    type IContext
 } from "@lib/shared";
-import { downloadJson } from "./util/requests.js";
 
-export abstract class AbstractPackageProvider
-    implements IPackageJsonProvider, IPackageMetaDataProvider
+export class OnlinePackageProvider
+    implements IPackageMetaDataVersionProvider, IPackageMetaDataProvider
 {
-    protected readonly _cache: Map<string, IPackageMetadata> = new Map();
+    private _queryClient = new QueryClient({
+        defaultOptions: {
+            queries: {
+                retry: 3,
+                staleTime: Infinity
+            }
+        }
+    });
 
-    abstract getPackageMetadata(name: string): Promise<PackageMetaData | undefined>;
-
-    async getPackageJson(
+    constructor(private _url: Url) {}
+    async getPackageVersionMetadata(
         name: string,
-        version: string | undefined = undefined
+        version: string | undefined = undefined,
+        context: IContext
     ): Promise<IPackageJson> {
-        let info: PackageMetaData | undefined = this._cache.get(name);
+        const { logger } = context;
+        const start = performance.now();
+        const versionToLookup = await this._resolveVersion(name, version, context);
+        const versionMetadata = await this._queryClient.fetchQuery({
+            queryKey: ["package", name, versionToLookup],
+            queryFn: async () => {
+                const response = await fetch(
+                    `${this._url}/${encodeURIComponent(name)}/${encodeURIComponent(versionToLookup)}`
+                );
 
-        if (!info) {
-            info = await this.getPackageMetadata(name);
+                if (!response.ok) {
+                    throw new Error(
+                        `Couldn't get metadata for package "${name}@${versionToLookup}"`
+                    );
+                }
 
-            if (!info) {
-                const _version: string = typeof version !== "undefined" ? `@${version}` : ``;
-                throw new Error(`Couldn't get package "${name}${_version}"`);
+                const data = (await response.json()) as IPackageJson;
+
+                return data;
             }
+        });
 
-            if (isUnpublished(info)) {
-                throw new Error(`Package "${name}" was unpublished`);
-            }
+        const end = performance.now();
+        const span = (end - start).toFixed(2);
+        logger.info(`Fetched data for "${name}@${versionToLookup}" (${span}ms)`);
 
-            this._cache.set(name, info);
+        return versionMetadata;
+    }
+    async getPackageMetadata(
+        name: string,
+        context: IContext
+    ): Promise<PackageMetaData | undefined> {
+        const { logger } = context;
+        const start = performance.now();
+
+        try {
+            const packageMetadata = await this._queryClient.fetchQuery({
+                queryKey: ["package", name],
+                queryFn: async () => {
+                    const response = await fetch(`${this._url}/${encodeURIComponent(name)}`);
+                    const data = (await response.json()) as PackageMetaData;
+
+                    if (response.ok) return data;
+                }
+            });
+
+            return packageMetadata;
+        } catch {
+        } finally {
+            const end = performance.now();
+            const span = (end - start).toFixed(2);
+            logger.info(`Fetched metadata "${name}" (${span}ms)`);
+        }
+    }
+
+    private async _resolveVersion(
+        name: string,
+        version: string | undefined,
+        context: IContext
+    ): Promise<string> {
+        const packageMetadata = await this.getPackageMetadata(name, context);
+
+        if (packageMetadata === undefined) {
+            throw new Error(`Couldn't get metadata for package "${name}"`);
         }
 
-        const allVersions: string[] = Object.keys(info.versions);
+        if (isUnpublished(packageMetadata)) {
+            throw new Error(`Package "${name}" was unpublished`);
+        }
+
+        const allVersions: string[] = Object.keys(packageMetadata.versions);
         const versionToResolve =
-            typeof version !== "undefined" ? version : info["dist-tags"].latest;
+            version !== undefined ? version : packageMetadata["dist-tags"].latest;
         const resolvedVersion: string | null = semver.maxSatisfying(allVersions, versionToResolve);
 
         if (resolvedVersion === null) {
             throw new Error(`Couldn't resolve version ${version} for "${name}"`);
         }
 
-        const packageJson = info.versions[resolvedVersion];
-
-        if (!packageJson)
-            throw new Error(`No package.json found for version ${resolvedVersion} for ${name}`);
-
-        return packageJson;
-    }
-}
-
-//loads npm data from the web
-export class OnlinePackageProvider extends AbstractPackageProvider {
-    constructor(private _url: Url) {
-        super();
-    }
-
-    async getPackageMetadata(
-        name: string
-    ): Promise<IPackageMetadata | IUnpublishedPackageMetadata | undefined> {
-        const cachedInfo = this._cache.get(name);
-
-        if (typeof cachedInfo !== "undefined") {
-            return cachedInfo;
-        } else {
-            const data = await downloadJson<IPackageMetadata>(
-                `${this._url}/${encodeURIComponent(name)}`
-            );
-
-            return data ?? undefined;
-        }
+        return resolvedVersion;
     }
 }
 

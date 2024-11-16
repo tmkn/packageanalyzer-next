@@ -1,42 +1,46 @@
 import { Package, type IPackage } from "./package.js";
 import { type DependencyTypes, type INpmKeyValue, type IPackageJson } from "./npm.js";
-import type { AttachmentData, Attachments, IAttachment } from "./attachment.js";
-import type { IPackageJsonProvider } from "./provider.js";
+import type { AttachmentData, Attachments } from "./attachment.js";
+import type { IPackageMetaDataVersionProvider } from "./provider.js";
 import type { ILogger } from "./logger.js";
+import type { Rule } from "./rules.js";
 
 export type PackageVersion = [name: string, version?: string];
 
-export interface IPackageVisitor<T extends Attachments> {
-    visit: (depType?: DependencyTypes) => Promise<IPackage<AttachmentData<T>>>;
+export type AttachmentLookup = Map<IPackage<{}>, Map<Rule<Attachments, any>, any>>;
+
+export interface IPackageVisitor {
+    visit: (depType?: DependencyTypes) => Promise<[IPackage<{}>, AttachmentLookup]>;
 }
 
-export class Visitor<T extends Attachments = IAttachment<string, any>>
-    implements IPackageVisitor<T>
-{
+export class Visitor implements IPackageVisitor {
+    private _attachmentLookup: AttachmentLookup = new Map();
     private _depthStack: string[] = [];
     private _depType: DependencyTypes = "dependencies";
 
     constructor(
         private readonly _entry: PackageVersion,
-        private readonly _provider: IPackageJsonProvider,
+        private readonly _provider: IPackageMetaDataVersionProvider,
         private readonly _logger: ILogger,
-        private readonly _attachments: Array<IAttachment<string, any>> = [],
+        private readonly _rules: Rule<Attachments, any>[],
         private readonly _maxDepth: number = Infinity
     ) {}
 
-    async visit(depType = this._depType): Promise<Package<AttachmentData<T>>> {
+    async visit(depType = this._depType): Promise<[Package<{}>, AttachmentLookup]> {
+        this._logger.log("Looking up dependencies...");
+
         try {
             const [name, version] = this._entry;
-            const rootPkg = await this._provider.getPackageJson(name, version);
-            const root = new Package<AttachmentData<T>>(rootPkg);
+            const rootPkg = await this._provider.getPackageVersionMetadata(name, version, {
+                logger: this._logger
+            });
+            const root = new Package<AttachmentData<{}>>(rootPkg);
 
-            this._logger.info("Fetching");
             this._depType = depType;
 
             await this._addAttachment(root);
 
             this._depthStack.push(root.fullName);
-            this._logger.info(`Fetched ${root.fullName}`);
 
             try {
                 if (this._depthStack.length <= this._maxDepth)
@@ -47,13 +51,13 @@ export class Visitor<T extends Attachments = IAttachment<string, any>>
                 throw e;
             }
 
-            return root;
+            return [root, this._attachmentLookup];
         } finally {
         }
     }
 
     private async visitDependencies(
-        parent: Package<AttachmentData<T>>,
+        parent: Package<AttachmentData<{}>>,
         dependencies: INpmKeyValue | undefined
     ): Promise<void> {
         try {
@@ -62,17 +66,18 @@ export class Visitor<T extends Attachments = IAttachment<string, any>>
             const packages: IPackageJson[] = [];
 
             for (const [name, version] of Object.entries(dependencies)) {
-                const resolved = await this._provider.getPackageJson(name, version);
+                const resolved = await this._provider.getPackageVersionMetadata(name, version, {
+                    logger: this._logger
+                });
 
                 packages.push(resolved);
             }
 
             for (const p of packages) {
-                const dependency = new Package<AttachmentData<T>>(p);
+                const dependency = new Package<AttachmentData<{}>>(p);
 
                 await this._addAttachment(dependency);
 
-                this._logger.info(`Fetched ${dependency.fullName}`);
                 parent.addDependency(dependency);
 
                 if (this._depthStack.includes(dependency.fullName)) {
@@ -87,26 +92,42 @@ export class Visitor<T extends Attachments = IAttachment<string, any>>
         }
     }
 
-    private async _addAttachment(p: Package<AttachmentData<T>>): Promise<void> {
-        const totalAttachments = this._attachments.length;
+    private async _addAttachment(p: Package<{}>): Promise<void> {
+        const attachmentData: Record<string, any> = {};
 
-        for (const [i, attachment] of this._attachments.entries()) {
-            try {
-                const attachmentMsg = `[${p.fullName}][Attachment: ${numPadding(
-                    i,
-                    totalAttachments
-                )} - ${attachment.name}]`;
-                this._logger.log(attachmentMsg);
+        for (const rule of this._rules) {
+            const [_severity, check, _params] = rule;
 
-                const data = await attachment.apply({
-                    p,
-                    // logger: (msg: string) => this._logger.log(`${attachmentMsg} - ${msg}`)
-                    logger: this._logger
-                });
+            if ("attachments" in check) {
+                const totalAttachments = Object.keys(check.attachments).length;
 
-                p.setAttachmentData(attachment.key, data);
-            } catch {
-                this._logger.log(`Failed to apply attachment: ${attachment.name}`);
+                for (const [i, [attachmentName, attachmentFn]] of Object.entries(
+                    check.attachments
+                ).entries()) {
+                    try {
+                        const attachmentMsg = `[${p.fullName}][Attachment: ${numPadding(
+                            i,
+                            totalAttachments
+                        )} - ${attachmentName}]`;
+                        this._logger.log(attachmentMsg);
+
+                        const data = await attachmentFn({
+                            p,
+                            // logger: (msg: string) => this._logger.log(`${attachmentMsg} - ${msg}`)
+                            logger: this._logger
+                        });
+                        attachmentData[attachmentName] = data;
+                    } catch {
+                        this._logger.warn(`Failed to apply attachment: ${attachmentName}`);
+                    }
+                }
+
+                const lookup: Map<Rule<Attachments, any>, any> = this._attachmentLookup.get(p) ??
+                new Map();
+                lookup.set(rule, attachmentData);
+                this._attachmentLookup.set(p, lookup);
+            } else {
+                this._attachmentLookup.set(p, new Map([[rule, attachmentData]]));
             }
         }
     }

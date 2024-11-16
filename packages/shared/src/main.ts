@@ -10,3 +10,7 @@ export * from "./attachment.js";
 export * from "./package.js";
 export * from "./npm.js";
 export * from "./util/shared.js";
+export * from "./util/DependencyUtilities.js";
+export * from "./util/PathUtilities.js";
+
+export const foo = 3;

@@ -1,7 +1,10 @@
 import _ from "lodash";
+import assert from "node:assert";
 
 import { type IPackageJson } from "./npm.js";
-// import { CollectorNode, ICollectorNode } from "./collector";
+import type { AttachmentLookup } from "./visitor.js";
+import type { Rule } from "./rules.js";
+import type { Attachments } from "./attachment.js";
 
 interface IDeprecatedInfo {
     deprecated: boolean;
@@ -30,7 +33,6 @@ export interface IPackage<T extends Record<string, any> = Record<string, any>> {
     // Partial<...> because attachments could have failed during lookup
     getAttachmentData(): Partial<T>;
     getAttachmentData<K extends keyof T>(key: K): T[K];
-    setAttachmentData<K extends keyof T>(key: K, data: T[K]): void;
 }
 
 export class Package<T extends Record<string, any>> implements IPackage<T> {
@@ -38,7 +40,7 @@ export class Package<T extends Record<string, any>> implements IPackage<T> {
     isLoop = false;
 
     private _attachmentData: T = {} as T;
-    private readonly _dependencies: IPackage<T>[] = [];
+    private _dependencies: IPackage<T>[] = [];
 
     constructor(private readonly _data: Readonly<IPackageJson>) {}
 
@@ -56,6 +58,10 @@ export class Package<T extends Record<string, any>> implements IPackage<T> {
 
     get directDependencies(): IPackage<T>[] {
         return this._dependencies;
+    }
+
+    set directDependencies(dependencies: IPackage<T>[]) {
+        this._dependencies = dependencies;
     }
 
     get deprecatedInfo(): IDeprecatedInfo {
@@ -141,37 +147,31 @@ export class Package<T extends Record<string, any>> implements IPackage<T> {
             return structuredClone(this._attachmentData);
         }
     }
+}
 
-    setAttachmentData<K extends keyof T>(key: K, data: T[K]): void {
-        this._attachmentData[key] = data;
-    }
+// wraps pkg in a Proxy and sets the attachment data needed for the rule
+export function setAttachments(
+    pkg: IPackage<{}>,
+    rule: Rule<Attachments, any>,
+    attachmentLookup: AttachmentLookup
+): IPackage<Record<string, any>> {
+    const attachmentData = attachmentLookup.get(pkg);
+    assert(attachmentData, `No attachment data found for "${pkg.fullName}"`);
+    const dataForRule = attachmentData.get(rule);
+    assert(dataForRule, `No attachment data found for rule "${rule[1].name}"`);
 
-    // todo enable later
-    // collect<D>(dataFn: (pkg: IPackage<T>) => D): ICollectorNode<D, IPackage<T>> {
-    //     const identityFn = (i: IPackage<T>) => i.fullName;
-    //     const rootCollectorNode: ICollectorNode<D, IPackage<T>> = new CollectorNode(
-    //         dataFn(this),
-    //         this,
-    //         identityFn
-    //     );
+    const root = Object.create(pkg);
 
-    //     const visit = (
-    //         parentCollector: ICollectorNode<D, IPackage<T>>,
-    //         parentPkg: IPackage<T>
-    //     ): void => {
-    //         for (const pkg of parentPkg.directDependencies) {
-    //             const collectorNode = new CollectorNode(dataFn(pkg), pkg, identityFn);
+    Object.defineProperty(root, "_attachmentData", {
+        value: dataForRule
+    });
+    root.directDependencies = pkg.directDependencies.map(dependency => {
+        const proxyDependency = setAttachments(dependency as Package<{}>, rule, attachmentLookup);
 
-    //             collectorNode.parent = parentCollector;
+        proxyDependency.parent = root;
 
-    //             parentCollector.children.push(collectorNode);
+        return proxyDependency;
+    });
 
-    //             visit(collectorNode, pkg);
-    //         }
-    //     };
-
-    //     visit(rootCollectorNode, this);
-
-    //     return rootCollectorNode;
-    // }
+    return root;
 }

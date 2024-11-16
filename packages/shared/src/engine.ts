@@ -1,58 +1,149 @@
 import chalk from "chalk";
 
-import type { ILogger } from "./logger.js";
-import type { IPackageJsonProvider } from "./provider.js";
-import { Visitor } from "./visitor.js";
+import { LogLevel, type ILogger } from "./logger.js";
+import type { IPackageMetaDataVersionProvider } from "./provider.js";
+import { getPackageVersionfromString, Visitor } from "./visitor.js";
+import type { IRuleSet } from "./ruleset.js";
+import { setAttachments, type IPackage } from "./package.js";
+import type { Check } from "./rules.js";
+import type { Attachments } from "./attachment.js";
+import { Formatter, LintResultFormatter, type ILintResult } from "./formatter.js";
+import { PathUtilities } from "./util/PathUtilities.js";
 
 export interface IEngine {
-    start(): Promise<number>;
-    get logger(): ILogger;
-}
-
-enum LogLevel {
-    None = 0,
-    Error = 1,
-    Warning = 2,
-    Info = 4,
-    Log = 8
+    run(): Promise<number>;
 }
 
 interface IOptions {
     logLevel: LogLevel;
+    depth: number;
 }
 
 const defaultOptions: IOptions = {
-    logLevel: LogLevel.Info | LogLevel.Log | LogLevel.Warning | LogLevel.Error
+    logLevel: LogLevel.Info | LogLevel.Log | LogLevel.Warning | LogLevel.Error,
+    depth: Infinity
 };
 
 export class SimpleEngine implements IEngine {
+    private _options: IOptions = defaultOptions;
+    private logger: ILogger;
+
+    private exitCode: number = 0;
+
     constructor(
         private _rootPackage: string,
         private _logger: ILogger,
-        private _provider: IPackageJsonProvider,
-        private _options: IOptions = defaultOptions
-    ) {}
-
-    async start(): Promise<number> {
-        let returnValue = 0;
-        const logger = this.logger;
-        const visitor = new Visitor([this._rootPackage], this._provider, logger);
-
-        try {
-            const root = await visitor.visit();
-
-            logger.log(`Root package: ${root.fullName}`);
-        } catch (error: unknown) {
-            logger.error((error as Error).toString());
-
-            returnValue = 1;
-        }
-
-        return returnValue;
+        private _provider: IPackageMetaDataVersionProvider,
+        private _ruleSet: IRuleSet,
+        private options: Partial<IOptions> = {}
+    ) {
+        this.logger = this._setupLogger();
+        this._options = { ...defaultOptions, ...options };
     }
 
-    get logger(): ILogger {
-        const logger = new (class implements ILogger {
+    async run(): Promise<number> {
+        const logger = this.logger;
+
+        try {
+            const entry = getPackageVersionfromString(this._rootPackage);
+            const rules = this._ruleSet.getRules({ logger });
+            const visitor = new Visitor(entry, this._provider, logger, rules, this._options.depth);
+
+            const start = performance.now();
+            const [root, attachmentLookup] = await visitor.visit();
+            const end = performance.now();
+            const span = (end - start).toFixed(2);
+
+            logger.info(`Looking up dependencies took ${span}ms`);
+
+            logger.log(`Root package: ${root.fullName}`);
+
+            const stdoutFormatter = new Formatter(process.stdout);
+            const resultFormatter = new LintResultFormatter(stdoutFormatter);
+            const lintResults: ILintResult[] = [];
+            root.visit(dep => {
+                for (const rule of rules) {
+                    // most likely bottleneck
+                    const depWithAttachments = setAttachments(dep, rule, attachmentLookup);
+                    const [severity, check, params] = rule;
+                    let checkResult;
+
+                    try {
+                        checkResult = check.check({
+                            logger,
+                            pkg: depWithAttachments,
+                            params
+                        });
+                        if (this._isValidResultFormat(checkResult)) {
+                            if (severity === `error`) {
+                                this.exitCode = 1;
+                            }
+
+                            for (const message of this._toMessageArray(checkResult)) {
+                                lintResults.push({
+                                    type: severity,
+                                    name: check.name,
+                                    message,
+                                    path: new PathUtilities(depWithAttachments).path,
+                                    pkg: depWithAttachments
+                                });
+                            }
+                        } else if (checkResult !== undefined) {
+                            throw new Error(
+                                `Invalid check implementation! check() must return "string" or "string[]". Returned "${typeof checkResult}"`
+                            );
+                        }
+                    } catch (e) {
+                        this._reportError(e, lintResults, check, dep);
+                    }
+                }
+            }, true);
+
+            resultFormatter.format(lintResults);
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                logger.error(error.message);
+            } else {
+                logger.error("An unknown error occurred");
+            }
+
+            this.exitCode = 1;
+        }
+
+        return this.exitCode;
+    }
+
+    private _toMessageArray(result: string | string[]): string[] {
+        return Array.isArray(result) ? result : [result];
+    }
+
+    private _reportError(
+        e: unknown,
+        lintResults: ILintResult[],
+        rule: Check<Attachments, any>,
+        dep: IPackage
+    ): void {
+        this.exitCode = 1;
+
+        if (e instanceof Error)
+            lintResults.push({
+                type: `internal-error`,
+                name: rule.name,
+                message: e.message,
+                path: new PathUtilities(dep).path,
+                pkg: dep
+            });
+    }
+
+    private _isValidResultFormat(result: unknown): result is string | string[] {
+        return (
+            typeof result === `string` ||
+            (Array.isArray(result) && result.every(r => typeof r === `string`))
+        );
+    }
+
+    private _setupLogger(): ILogger {
+        return new (class implements ILogger {
             constructor(
                 private _logger: ILogger,
                 private _options: IOptions
@@ -88,7 +179,5 @@ export class SimpleEngine implements IEngine {
                 }
             }
         })(this._logger, this._options);
-
-        return logger;
     }
 }
