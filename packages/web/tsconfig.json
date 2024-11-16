@@ -1,6 +1,5 @@
 {
     "extends": "@tooling/tsconfig/strict.tsconfig.json",
-    // "include": ["src", "tests"],
     "compilerOptions": {
         "rootDir": ".",
         "outDir": "build"

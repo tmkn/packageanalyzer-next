@@ -17,11 +17,11 @@
         "@types/lodash": "^4.17.4",
         "@types/node": "^20.12.13",
         "@types/semver": "^7.5.8",
-        "@vitest/coverage-v8": "^2.0.5",
-        "prettier": "^3.3.3",
-        "turbo": "^2.3.0",
-        "typescript": "^5.5.4",
-        "vitest": "^2.0.5"
+        "@vitest/coverage-v8": "^2.1.6",
+        "prettier": "^3.4.1",
+        "turbo": "^2.3.3",
+        "typescript": "^5.7.2",
+        "vitest": "^2.1.6"
     },
     "packageManager": "npm@10.5.0",
     "workspaces": [
@@ -30,6 +30,7 @@
         "tooling/*"
     ],
     "dependencies": {
+        "@tanstack/query-core": "^5.62.0",
         "chalk": "^4.1.0",
         "lodash": "^4.17.21",
         "semver": "^7.6.3",
